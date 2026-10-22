@@ -1,0 +1,105 @@
+﻿@using Fcg.Web.Services.Carrinho
+@using Fcg.Web.Services.Auth
+@implements IDisposable
+
+@inject ICarrinhoService CarrinhoService
+@inject IAuthSession AuthSession
+
+<nav class="main-navbar">
+    <div class="navbar-container">
+        <a class="brand" href="/">
+            <span class="brand-mark">FCG</span>
+            <span class="brand-text">
+                FIAP <strong>Cloud Games</strong>
+            </span>
+        </a>
+
+        <button
+            type="button"
+            class="mobile-menu-button"
+            aria-label="Abrir menu"
+            aria-expanded="@(!collapseNavMenu)"
+            @onclick="ToggleNavMenu">
+            <span></span>
+            <span></span>
+            <span></span>
+        </button>
+
+        <div class="@NavMenuCssClass navbar-links">
+            <NavLink class="nav-link" href="/" Match="NavLinkMatch.All">
+                <span class="nav-icon">⌂</span>
+                <span>Home</span>
+            </NavLink>
+
+            <NavLink class="nav-link" href="/catalogo">
+                <span class="nav-icon">🎮</span>
+                <span>Catálogo</span>
+            </NavLink>
+
+            <NavLink class="nav-link cart-link" href="/carrinho">
+                <span class="nav-icon">🛒</span>
+                <span>Carrinho</span>
+
+                @if (CarrinhoService.Quantidade > 0)
+                {
+                    <span class="cart-badge">
+                        @CarrinhoService.Quantidade
+                    </span>
+                }
+            </NavLink>
+
+            <NavLink class="nav-link" href="/biblioteca">
+                <span class="nav-icon">📚</span>
+                <span>Biblioteca</span>
+            </NavLink>
+
+            <NavLink class="nav-link" href="/perfil">
+                <span class="nav-icon">👤</span>
+                <span>Meu perfil</span>
+            </NavLink>
+
+            @if (AuthSession.IsAuthenticated && AuthSession.Tipo == 1)
+            {
+                <NavLink class="nav-link" href="/admin/jogos">
+                    <span class="nav-icon">⚙️</span>
+                    <span>Gerenciar jogos</span>
+                </NavLink>
+            }
+
+            @if (!AuthSession.IsAuthenticated)
+            {
+                <NavLink class="nav-link login-link" href="/login">
+                    <span class="nav-icon">↪</span>
+                    <span>Login</span>
+                </NavLink>
+            }
+        </div>
+    </div>
+</nav>
+
+@code {
+    private bool collapseNavMenu = true;
+
+    private string NavMenuCssClass =>
+        collapseNavMenu ? "mobile-collapsed" : "mobile-open";
+
+    protected override void OnInitialized()
+    {
+        AuthSession.SessionChanged += OnSessionChanged;
+    }
+
+    private void OnSessionChanged()
+    {
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private void ToggleNavMenu()
+    {
+        collapseNavMenu = !collapseNavMenu;
+    }
+
+    public void Dispose()
+    {
+        AuthSession.SessionChanged -= OnSessionChanged;
+    }
+}

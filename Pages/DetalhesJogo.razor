@@ -1,0 +1,748 @@
+@page "/catalogo/{Id}"
+
+@using System.Net
+@using Fcg.Web.DTOs.Avaliacoes
+@using Fcg.Web.DTOs.Catalogo
+@using Fcg.Web.Services.Avaliacoes
+@using Fcg.Web.Services.Auth
+@using Fcg.Web.Services.Catalogo
+@using Fcg.Web.Services.Carrinho
+
+@inject ICatalogoService CatalogoService
+@inject ICarrinhoService CarrinhoService
+@inject IAvaliacaoService AvaliacaoService
+@inject IAuthSession AuthSession
+@inject NavigationManager Navigation
+
+<PageTitle>
+    @if (_jogo is not null)
+    {
+        @($"{_jogo.Titulo} - FCG")
+    }
+    else
+    {
+        @("Detalhes do jogo - FCG")
+    }
+</PageTitle>
+
+<div class="game-details-page">
+
+    @if (_carregando)
+    {
+        <div class="details-status">
+            <div class="loading-spinner"></div>
+            <span>Carregando detalhes do jogo...</span>
+        </div>
+    }
+    else if (!string.IsNullOrWhiteSpace(_erro))
+    {
+        <div class="details-status error">
+            <strong>Não foi possível carregar o jogo.</strong>
+            <span>@_erro</span>
+            <button type="button" @onclick="VoltarCatalogo">
+                Voltar ao catálogo
+            </button>
+        </div>
+    }
+    else if (_jogo is not null)
+    {
+        <button type="button"
+                class="back-button"
+                @onclick="VoltarCatalogo">
+            ← Voltar ao catálogo
+        </button>
+
+        <section class="game-details-card">
+
+            <div class="game-details-cover">
+                @if (!string.IsNullOrWhiteSpace(_jogo.ImagemUrl))
+                {
+                    <img class="game-details-image"
+                         src="@_jogo.ImagemUrl"
+                         alt="Capa de @_jogo.Titulo" />
+                }
+                else
+                {
+                    <span>🎮</span>
+                }
+            </div>
+
+            <div class="game-details-content">
+
+                <span class="game-details-genre">
+                    @ObterNomeGenero(_jogo.Genero)
+                </span>
+
+                <h1>@_jogo.Titulo</h1>
+
+                <p class="game-details-description">
+                    @_jogo.Descricao
+                </p>
+
+                <div class="game-details-meta">
+
+                    <div>
+                        <span>Preço</span>
+                        <strong>@_jogo.Preco.ToString("C")</strong>
+                    </div>
+
+                    <div>
+                        <span>Moeda</span>
+                        <strong>@_jogo.Moeda</strong>
+                    </div>
+
+                    <div>
+                        <span>Lançamento</span>
+                        <strong>@_jogo.DataLancamento.ToString("dd/MM/yyyy")</strong>
+                    </div>
+
+                    <div>
+                        <span>Status</span>
+                        <strong>
+                            @(_jogo.Ativo ? "Disponível" : "Indisponível")
+                        </strong>
+                    </div>
+
+                </div>
+
+                <div class="game-details-actions">
+
+                    @if (_jogo.Ativo)
+                    {
+                        <button type="button"
+                                class="primary-button"
+                                @onclick="AdicionarAoCarrinho">
+                            @if (CarrinhoService.Contem(_jogo.Id))
+                            {
+                                <span>✓ No carrinho</span>
+                            }
+                            else
+                            {
+                                <span>Adicionar ao carrinho</span>
+                            }
+                        </button>
+                    }
+
+                    <button type="button"
+                            class="secondary-button"
+                            @onclick="VoltarCatalogo">
+                        Continuar explorando
+                    </button>
+
+                </div>
+            </div>
+        </section>
+
+        <section class="reviews-section" aria-labelledby="reviews-heading">
+
+            <div class="reviews-heading">
+                <div>
+                    <span class="reviews-eyebrow">OPINIÃO DA COMUNIDADE</span>
+                    <h2 id="reviews-heading">Avaliações dos jogadores</h2>
+                    <p>Compartilhe sua experiência com este jogo.</p>
+                </div>
+            </div>
+
+            @if (!AuthSession.IsAuthenticated)
+            {
+                <div class="reviews-login-prompt">
+                    <div class="reviews-prompt-icon">★</div>
+                    <div>
+                        <h3>Entre para ver as avaliações</h3>
+                        <p>
+                            Faça login para consultar as opiniões dos jogadores
+                            e publicar sua própria avaliação.
+                        </p>
+                    </div>
+                    <a class="reviews-login-button" href="/login">
+                        Entrar na conta
+                    </a>
+                </div>
+            }
+            else
+            {
+                @if (_carregandoAvaliacoes)
+                {
+                    <div class="reviews-loading">
+                        <div class="loading-spinner"></div>
+                        <span>Carregando avaliações...</span>
+                    </div>
+                }
+                else if (!string.IsNullOrWhiteSpace(_erroAvaliacoes))
+                {
+                    <div class="reviews-message reviews-error">
+                        @_erroAvaliacoes
+                        <button type="button"
+                                class="reviews-retry-button"
+                                @onclick="CarregarAvaliacoesAsync">
+                            Tentar novamente
+                        </button>
+                    </div>
+                }
+                else
+                {
+                    <div class="reviews-summary">
+
+                        <div class="reviews-score">
+                            <strong>
+                                @(_resumo is null
+                                    ? "0,0"
+                                    : _resumo.MediaNota.ToString("0.0"))
+                            </strong>
+
+                            <div class="reviews-stars-display"
+                                 aria-label="Média geral das avaliações">
+                                ★★★★★
+                            </div>
+
+                            <span>
+                                @_totalAvaliacoes
+                                @(_totalAvaliacoes == 1
+                                    ? "avaliação"
+                                    : "avaliações")
+                            </span>
+                        </div>
+
+                        <div class="reviews-distribution">
+                            @for (var nota = 5; nota >= 1; nota--)
+                            {
+                                var notaAtual = nota;
+                                var quantidade = ObterQuantidadeNota(notaAtual);
+                                var percentual = _resumo is not null
+                                    && _resumo.Total > 0
+                                        ? (double)quantidade / _resumo.Total * 100
+                                        : 0;
+
+                                <div class="rating-row" @key="notaAtual">
+                                    <span>@notaAtual ★</span>
+                                    <div class="rating-bar">
+                                        <div class="rating-bar-fill"
+                                             style="width: @($"{percentual.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}%")">
+                                        </div>
+                                    </div>
+                                    <span class="rating-count">@quantidade</span>
+                                </div>
+                            }
+                        </div>
+                    </div>
+
+                    <div class="review-form-card">
+                        <div class="review-form-heading">
+                            <div>
+                                <h3>Escreva sua avaliação</h3>
+                                <p>Conte à comunidade o que achou do jogo.</p>
+                            </div>
+                        </div>
+
+                        <EditForm Model="_formulario"
+                                  OnValidSubmit="EnviarAvaliacaoAsync">
+                            <DataAnnotationsValidator />
+
+                            <div class="review-field">
+                                <label>Sua nota</label>
+                                <div class="review-star-picker"
+                                     role="group"
+                                     aria-label="Selecione uma nota de uma a cinco estrelas">
+                                    @for (var nota = 1; nota <= 5; nota++)
+                                    {
+                                        var notaAtual = nota;
+
+                                        <button type="button"
+                                                class="@ObterClasseEstrela(notaAtual)"
+                                                aria-label="@($"{notaAtual} estrelas")"
+                                                aria-pressed="@(_notaSelecionada == notaAtual)"
+                                                @onclick="() => SelecionarNota(notaAtual)">
+                                            ★
+                                        </button>
+                                    }
+                                    <span class="selected-rating">
+                                        @_notaSelecionada de 5
+                                    </span>
+                                </div>
+                            </div>
+
+                            <div class="review-field">
+                                <label for="review-title">
+                                    Título <span>(opcional)</span>
+                                </label>
+                                <InputText id="review-title"
+                                           class="review-input"
+                                           @bind-Value="_formulario.Titulo"
+                                           maxlength="120"
+                                           placeholder="Resuma sua experiência" />
+                            </div>
+
+                            <div class="review-field">
+                                <label for="review-comment">Comentário</label>
+                                <InputTextArea id="review-comment"
+                                               class="review-input review-textarea"
+                                               @bind-Value="_formulario.Comentario"
+                                               maxlength="2000"
+                                               placeholder="O que você gostou? O que poderia melhorar?" />
+                                <ValidationMessage For="@(() => _formulario.Comentario)" />
+                            </div>
+
+                            <div class="review-field">
+                                <label for="review-tags">
+                                    Tags <span>(opcional, separadas por vírgula)</span>
+                                </label>
+                                <InputText id="review-tags"
+                                           class="review-input"
+                                           @bind-Value="_formulario.Tags"
+                                           placeholder="Ex.: história, gráficos, jogabilidade" />
+                            </div>
+
+                            @if (!string.IsNullOrWhiteSpace(_mensagemFormulario))
+                            {
+                                <div class="reviews-message @(_sucessoFormulario ? "reviews-success" : "reviews-error")">
+                                    @_mensagemFormulario
+                                </div>
+                            }
+
+                            <button type="submit"
+                                    class="primary-button review-submit-button"
+                                    disabled="@_enviandoAvaliacao">
+                                @if (_enviandoAvaliacao)
+                                {
+                                    <span>Enviando avaliação...</span>
+                                }
+                                else
+                                {
+                                    <span>Publicar avaliação</span>
+                                }
+                            </button>
+                        </EditForm>
+                    </div>
+
+                    <div class="reviews-list-heading">
+                        <div>
+                            <h3>O que os jogadores estão dizendo</h3>
+                            <p>As avaliações mais recentes aparecem primeiro.</p>
+                        </div>
+                    </div>
+
+                    @if (_avaliacoes.Count == 0)
+                    {
+                        <div class="reviews-empty">
+                            <span class="reviews-empty-icon">✎</span>
+                            <h3>Ainda não há avaliações</h3>
+                            <p>Seja o primeiro a compartilhar sua experiência!</p>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="reviews-list">
+                            @foreach (var avaliacao in _avaliacoes)
+                            {
+                                <article class="review-card" @key="avaliacao.Id">
+                                    <div class="review-card-top">
+                                        <div class="review-avatar">
+                                            @(string.IsNullOrWhiteSpace(avaliacao.UsuarioId)
+                                                ? "J"
+                                                : avaliacao.UsuarioId[..1].ToUpperInvariant())
+                                        </div>
+
+                                        <div class="review-author">
+                                            <strong>
+                                                Jogador @avaliacao.UsuarioId
+                                            </strong>
+                                            <span>
+                                                @avaliacao.DataCriacao.ToLocalTime().ToString("dd/MM/yyyy")
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    @if (!string.IsNullOrWhiteSpace(avaliacao.Titulo))
+                                    {
+                                        <h4 class="review-card-title">
+                                            @avaliacao.Titulo
+                                        </h4>
+                                    }
+
+                                    <p class="review-card-comment">
+                                        @avaliacao.Comentario
+                                    </p>
+
+                                    @if (avaliacao.Tags is not null && avaliacao.Tags.Count > 0)
+                                    {
+                                        <div class="review-tags">
+                                            @foreach (var tag in avaliacao.Tags)
+                                            {
+                                                <span @key="tag">@tag</span>
+                                            }
+                                        </div>
+                                    }
+
+                                    <div class="review-card-footer">
+                                        <span class="review-rating-unavailable">
+                                            Avaliação publicada
+                                        </span>
+
+                                        <button type="button"
+                                                class="useful-button"
+                                                disabled="@_votandoIds.Contains(avaliacao.Id)"
+                                                @onclick="() => VotarUtilAsync(avaliacao)">
+                                            <span>👍</span>
+                                            Útil (@avaliacao.VotosUteis)
+                                        </button>
+                                    </div>
+                                </article>
+                            }
+                        </div>
+
+                        @if (TotalPaginas > 1)
+                        {
+                            <div class="reviews-pagination">
+                                <button type="button"
+                                        class="pagination-button"
+                                        disabled="@(_pagina <= 1 || _carregandoAvaliacoes)"
+                                        @onclick="PaginaAnteriorAsync">
+                                    ← Anterior
+                                </button>
+
+                                <span>
+                                    Página @_pagina de @TotalPaginas
+                                </span>
+
+                                <button type="button"
+                                        class="pagination-button"
+                                        disabled="@(_pagina >= TotalPaginas || _carregandoAvaliacoes)"
+                                        @onclick="ProximaPaginaAsync">
+                                    Próxima →
+                                </button>
+                            </div>
+                        }
+                    }
+                }
+            }
+        </section>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public string? Id { get; set; }
+
+    private JogoResponseDto? _jogo;
+    private bool _carregando;
+    private string? _erro;
+
+    private AvaliacaoResumoResponseDto? _resumo;
+    private List<AvaliacaoResponseDto> _avaliacoes = [];
+    private bool _carregandoAvaliacoes;
+    private string? _erroAvaliacoes;
+
+    private int _pagina = 1;
+    private const int TamanhoPagina = 5;
+
+    private readonly AvaliacaoFormModel _formulario = new();
+    private int _notaSelecionada = 5;
+    private bool _enviandoAvaliacao;
+    private string? _mensagemFormulario;
+    private bool _sucessoFormulario;
+
+    private readonly HashSet<string> _votandoIds = [];
+
+    private long _totalAvaliacoes;
+
+    private int TotalPaginas =>
+        Math.Max(1, (int)Math.Ceiling(_totalAvaliacoes / (double)TamanhoPagina));
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await CarregarJogoAsync();
+    }
+
+    private async Task CarregarJogoAsync()
+    {
+        if (string.IsNullOrWhiteSpace(Id))
+        {
+            _erro = "O identificador do jogo não foi informado.";
+            return;
+        }
+
+        _carregando = true;
+        _erro = null;
+        _jogo = null;
+
+        try
+        {
+            _jogo = await CatalogoService.ObterJogoAsync(Id);
+
+            _pagina = 1;
+            _resumo = null;
+            _avaliacoes.Clear();
+            _totalAvaliacoes = 0;
+
+            if (AuthSession.IsAuthenticated)
+            {
+                await CarregarAvaliacoesAsync();
+            }
+        }
+        catch (HttpRequestException)
+        {
+            _erro = "Não foi possível conectar ao catálogo.";
+        }
+        catch (Exception ex)
+        {
+            _erro = ex.Message;
+        }
+        finally
+        {
+            _carregando = false;
+        }
+    }
+
+    private async Task CarregarAvaliacoesAsync()
+    {
+        if (_jogo is null || !AuthSession.IsAuthenticated)
+        {
+            return;
+        }
+
+        _carregandoAvaliacoes = true;
+        _erroAvaliacoes = null;
+
+        try
+        {
+            var tarefaResumo = AvaliacaoService.ObterResumoAsync(_jogo.Id);
+            var tarefaLista = AvaliacaoService.ListarPorJogoAsync(
+                _jogo.Id,
+                _pagina,
+                TamanhoPagina);
+
+            await Task.WhenAll(tarefaResumo, tarefaLista);
+
+            _resumo = await tarefaResumo;
+
+            var resultadoLista = await tarefaLista;
+            _avaliacoes = resultadoLista.Itens?.ToList() ?? [];
+            _totalAvaliacoes = resultadoLista.Total;
+        }
+        catch (HttpRequestException ex)
+        {
+            _erroAvaliacoes = ex.StatusCode switch
+            {
+                HttpStatusCode.Unauthorized =>
+                    "Sua sessão expirou. Entre novamente para consultar as avaliações.",
+                HttpStatusCode.Forbidden =>
+                    "Você não tem permissão para consultar as avaliações.",
+                _ =>
+                    "Não foi possível carregar as avaliações. Verifique se a API de catálogo está funcionando."
+            };
+        }
+        catch
+        {
+            _erroAvaliacoes =
+                "Ocorreu um erro ao consultar as avaliações. Tente novamente.";
+        }
+        finally
+        {
+            _carregandoAvaliacoes = false;
+        }
+    }
+
+    private async Task EnviarAvaliacaoAsync()
+    {
+        if (_jogo is null || !AuthSession.IsAuthenticated || _enviandoAvaliacao)
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_formulario.Comentario))
+        {
+            _mensagemFormulario = "Escreva um comentário antes de publicar.";
+            _sucessoFormulario = false;
+            return;
+        }
+
+        _enviandoAvaliacao = true;
+        _mensagemFormulario = null;
+
+        try
+        {
+            var tags = string.IsNullOrWhiteSpace(_formulario.Tags)
+                ? null
+                : _formulario.Tags
+                    .Split(',', StringSplitOptions.RemoveEmptyEntries |
+                                  StringSplitOptions.TrimEntries)
+                    .Where(tag => !string.IsNullOrWhiteSpace(tag))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .Take(10)
+                    .ToArray();
+
+            var request = new CriarAvaliacaoRequestDto(
+                JogoId: _jogo.Id,
+                Nota: _notaSelecionada,
+                Comentario: _formulario.Comentario.Trim(),
+                Titulo: string.IsNullOrWhiteSpace(_formulario.Titulo)
+                    ? null
+                    : _formulario.Titulo.Trim(),
+                Tags: tags);
+
+            await AvaliacaoService.CriarAsync(request);
+
+            _formulario.Titulo = string.Empty;
+            _formulario.Comentario = string.Empty;
+            _formulario.Tags = string.Empty;
+            _notaSelecionada = 5;
+            _pagina = 1;
+
+            _mensagemFormulario = "Sua avaliação foi publicada com sucesso!";
+            _sucessoFormulario = true;
+
+            await CarregarAvaliacoesAsync();
+        }
+        catch (HttpRequestException ex)
+        {
+            _sucessoFormulario = false;
+            _mensagemFormulario = ex.StatusCode switch
+            {
+                HttpStatusCode.Conflict =>
+                    "Você já avaliou este jogo.",
+                HttpStatusCode.Unauthorized =>
+                    "Sua sessão expirou. Entre novamente para publicar uma avaliação.",
+                HttpStatusCode.NotFound =>
+                    "O jogo não foi encontrado na API.",
+                HttpStatusCode.UnprocessableEntity =>
+                    "A avaliação foi rejeitada pela validação. Confira a nota e o comentário.",
+                _ =>
+                    "Não foi possível publicar sua avaliação. Tente novamente."
+            };
+        }
+        catch
+        {
+            _sucessoFormulario = false;
+            _mensagemFormulario =
+                "Ocorreu um erro ao enviar sua avaliação. Tente novamente.";
+        }
+        finally
+        {
+            _enviandoAvaliacao = false;
+        }
+    }
+
+    private async Task VotarUtilAsync(AvaliacaoResponseDto avaliacao)
+    {
+        if (_votandoIds.Contains(avaliacao.Id))
+        {
+            return;
+        }
+
+        _votandoIds.Add(avaliacao.Id);
+
+        try
+        {
+            var novoTotal = await AvaliacaoService.VotarUtilAsync(avaliacao.Id);
+            var indice = _avaliacoes.FindIndex(item => item.Id == avaliacao.Id);
+
+            if (indice >= 0)
+            {
+                _avaliacoes[indice] = _avaliacoes[indice] with
+                {
+                    VotosUteis = novoTotal
+                };
+            }
+        }
+        catch (HttpRequestException ex)
+        {
+            _erroAvaliacoes = ex.StatusCode == HttpStatusCode.Unauthorized
+                ? "Sua sessão expirou. Entre novamente para votar."
+                : "Não foi possível registrar seu voto útil.";
+        }
+        catch
+        {
+            _erroAvaliacoes = "Não foi possível registrar seu voto útil.";
+        }
+        finally
+        {
+            _votandoIds.Remove(avaliacao.Id);
+        }
+    }
+
+    private async Task PaginaAnteriorAsync()
+    {
+        if (_pagina <= 1)
+        {
+            return;
+        }
+
+        _pagina--;
+        await CarregarAvaliacoesAsync();
+    }
+
+    private async Task ProximaPaginaAsync()
+    {
+        if (_pagina >= TotalPaginas)
+        {
+            return;
+        }
+
+        _pagina++;
+        await CarregarAvaliacoesAsync();
+    }
+
+    private long ObterQuantidadeNota(int nota)
+    {
+        return _resumo is not null &&
+               _resumo.Distribuicao.TryGetValue(nota, out var quantidade)
+            ? quantidade
+            : 0;
+    }
+
+    private string ObterClasseEstrela(int nota)
+    {
+        return nota <= _notaSelecionada
+            ? "review-star selected"
+            : "review-star";
+    }
+
+    private void SelecionarNota(int nota)
+    {
+        _notaSelecionada = nota;
+    }
+
+    private void AdicionarAoCarrinho()
+    {
+        if (_jogo is null || !_jogo.Ativo)
+        {
+            return;
+        }
+
+        CarrinhoService.Adicionar(_jogo);
+    }
+
+    private void VoltarCatalogo()
+    {
+        Navigation.NavigateTo("/catalogo");
+    }
+
+    private static string ObterNomeGenero(int genero)
+    {
+        return genero switch
+        {
+            0 => "Ação",
+            1 => "Aventura",
+            2 => "RPG",
+            3 => "Estratégia",
+            4 => "Esporte",
+            5 => "Corrida",
+            6 => "Simulação",
+            7 => "Puzzle",
+            8 => "FPS",
+            9 => "MOBA",
+            10 => "Educacional",
+            11 => "Outro",
+            _ => "Jogo"
+        };
+    }
+
+    private sealed class AvaliacaoFormModel
+    {
+        public string Titulo { get; set; } = string.Empty;
+
+        public string Comentario { get; set; } = string.Empty;
+
+        public string Tags { get; set; } = string.Empty;
+    }
+}

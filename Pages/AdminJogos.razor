@@ -1,0 +1,607 @@
+@page "/admin/jogos"
+
+@using System.ComponentModel.DataAnnotations
+@using System.Net
+@using Fcg.Web.DTOs.Catalogo
+@using Fcg.Web.Services.Auth
+@using Fcg.Web.Services.Catalogo
+@using Fcg.Web.Services.AdminJogos
+@using Microsoft.AspNetCore.Components.Forms
+
+@inject IAuthSession AuthSession
+@inject ICatalogoService CatalogoService
+@inject IAdminJogosService AdminJogosService
+@inject NavigationManager Navigation
+
+<PageTitle>Gerenciar jogos | FCG Store</PageTitle>
+
+<div class="admin-games-page">
+    <header class="admin-games-header">
+        <div>
+            <span class="admin-eyebrow">PAINEL ADMINISTRATIVO</span>
+            <h1>Gerenciar jogos</h1>
+            <p>Cadastre, edite e gerencie os jogos disponíveis na FCG Store.</p>
+        </div>
+
+        @if (PodeAcessar)
+        {
+            <button class="admin-primary-button" type="button" @onclick="NovoJogo">
+                + Novo jogo
+            </button>
+        }
+    </header>
+
+    @if (!VerificacaoConcluida)
+    {
+        <div class="admin-panel">Verificando acesso...</div>
+    }
+    else if (!PodeAcessar)
+    {
+        <section class="admin-panel access-denied">
+            <h2>Acesso restrito</h2>
+            <p>Esta área está disponível apenas para administradores.</p>
+            <button class="admin-primary-button" @onclick="VoltarAoCatalogo">
+                Voltar ao catálogo
+            </button>
+        </section>
+    }
+    else
+    {
+        @if (!string.IsNullOrWhiteSpace(MensagemSucesso))
+        {
+            <div class="admin-alert success" role="status">@MensagemSucesso</div>
+        }
+
+        @if (!string.IsNullOrWhiteSpace(MensagemErro))
+        {
+            <div class="admin-alert error" role="alert">@MensagemErro</div>
+        }
+
+        <div class="admin-content-grid">
+            <section class="admin-panel">
+                <div class="admin-panel-heading">
+                    <div>
+                        <span class="admin-eyebrow">GERENCIAMENTO</span>
+                        <h2>@(JogoEmEdicao is null ? "Cadastrar jogo" : "Editar jogo")</h2>
+                    </div>
+                </div>
+
+                <EditForm Model="Formulario" OnValidSubmit="SalvarAsync">
+                    <DataAnnotationsValidator />
+                    <ValidationSummary />
+
+                    <div class="admin-field">
+                        <label for="titulo">Título</label>
+                        <InputText id="titulo"
+                                   class="admin-input"
+                                   @bind-Value="Formulario.Titulo" />
+                        <ValidationMessage For="@(() => Formulario.Titulo)" />
+                    </div>
+
+                    <div class="admin-field">
+                        <label for="descricao">Descrição</label>
+                        <InputTextArea id="descricao"
+                                       class="admin-input"
+                                       rows="4"
+                                       @bind-Value="Formulario.Descricao" />
+                        <ValidationMessage For="@(() => Formulario.Descricao)" />
+                    </div>
+
+                    <div class="admin-field">
+                        <label for="genero">Gênero</label>
+                        <InputSelect id="genero"
+                                     class="admin-input"
+                                     @bind-Value="Formulario.Genero">
+                            <option value="0">Ação</option>
+                            <option value="1">Aventura</option>
+                            <option value="2">RPG</option>
+                            <option value="3">Estratégia</option>
+                            <option value="4">Esporte</option>
+                            <option value="5">Corrida</option>
+                            <option value="6">Simulação</option>
+                            <option value="7">Puzzle</option>
+                            <option value="8">FPS</option>
+                            <option value="9">MOBA</option>
+                            <option value="10">Educacional</option>
+                            <option value="11">Outro</option>
+                        </InputSelect>
+                    </div>
+
+                    <div class="admin-field">
+                        <label for="preco">Preço (R$)</label>
+                        <InputNumber id="preco"
+                                     class="admin-input"
+                                     @bind-Value="Formulario.Preco" />
+                        <ValidationMessage For="@(() => Formulario.Preco)" />
+                    </div>
+
+                    <div class="admin-field">
+                        <label for="dataLancamento">Data de lançamento</label>
+                        <InputDate id="dataLancamento"
+                                   class="admin-input"
+                                   @bind-Value="Formulario.DataLancamento"
+                                   disabled="@(JogoEmEdicao is not null)" />
+
+                        @if (JogoEmEdicao is not null)
+                        {
+                            <small>
+                                A API atual não permite alterar a data de lançamento.
+                            </small>
+                        }
+                        else
+                        {
+                            <ValidationMessage For="@(() => Formulario.DataLancamento)" />
+                        }
+                    </div>
+
+                    <div class="admin-field">
+                        <label for="imagemUrl">URL da imagem do jogo</label>
+                        <InputText id="imagemUrl"
+                                   class="admin-input"
+                                   type="url"
+                                   placeholder="https://exemplo.com/imagem-do-jogo.jpg"
+                                   Value="@Formulario.ImagemUrl"
+                                   ValueChanged="AoAlterarImagemUrl"
+                                   ValueExpression="@(() => Formulario.ImagemUrl)" />
+                        <small>Informe um endereço público de imagem iniciado por https:// ou http://.</small>
+                        <ValidationMessage For="@(() => Formulario.ImagemUrl)" />
+                    </div>
+
+
+                    <div class="admin-field">
+                        <label for="arquivoImagem">Ou selecione uma imagem do computador</label>
+                        <InputFile id="arquivoImagem"
+                                OnChange="AoSelecionarImagemAsync"
+                                accept="image/png,image/jpeg,image/webp"
+                                disabled="@EnviandoImagem" />
+
+                        <small>Formatos aceitos: PNG, JPEG e WebP. Tamanho máximo: 5 MB.</small>
+
+                        @if (EnviandoImagem)
+                        {
+                            <p>Enviando imagem...</p>
+                        }
+                    </div>
+
+
+
+                    @if (!string.IsNullOrWhiteSpace(Formulario.ImagemUrl) && UrlImagemValida)
+                    {
+                        <div class="admin-image-preview">
+                            <span>Prévia da imagem</span>
+                            <img src="@Formulario.ImagemUrl"
+                                 alt="@($"Prévia da capa de {Formulario.Titulo}")"
+                                 @onerror="ImagemPreviewFalhou" />
+                            @if (ImagemComErro)
+                            {
+                                <p>Não foi possível carregar essa imagem. Confira a URL.</p>
+                            }
+                        </div>
+                    }
+
+                    <div class="admin-form-actions">
+                        <button class="admin-primary-button"
+                                type="submit"
+                                disabled="@Salvando">
+                            @(Salvando ? "Salvando..." :
+                                JogoEmEdicao is null ? "Cadastrar jogo" : "Salvar alterações")
+                        </button>
+
+                        @if (JogoEmEdicao is not null)
+                        {
+                            <button class="admin-secondary-button"
+                                    type="button"
+                                    @onclick="NovoJogo">
+                                Cancelar edição
+                            </button>
+                        }
+                    </div>
+                </EditForm>
+            </section>
+
+            <section class="admin-panel">
+                <div class="admin-panel-heading">
+                    <div>
+                        <span class="admin-eyebrow">CATÁLOGO</span>
+                        <h2>Jogos cadastrados</h2>
+                    </div>
+
+                    <button class="admin-secondary-button"
+                            type="button"
+                            @onclick="CarregarJogosAsync"
+                            disabled="@Carregando">
+                        Atualizar
+                    </button>
+                </div>
+
+                <div class="admin-field">
+                    <label for="busca">Pesquisar jogos</label>
+                    <InputText id="busca"
+                               class="admin-input"
+                               placeholder="Digite o título..."
+                               @bind-Value="Busca"
+                               @bind-Value:event="oninput" />
+                </div>
+
+                @if (Carregando)
+                {
+                    <p>Carregando jogos...</p>
+                }
+                else if (JogosFiltrados.Count == 0)
+                {
+                    <p>Nenhum jogo encontrado.</p>
+                }
+                else
+                {
+                    <div class="admin-games-list">
+                        @foreach (var jogo in JogosFiltrados)
+                        {
+                            <article class="admin-game-item" @key="jogo.Id">
+                                @if (!string.IsNullOrWhiteSpace(jogo.ImagemUrl))
+                                {
+                                    <img class="admin-game-thumbnail"
+                                         src="@jogo.ImagemUrl"
+                                         alt="@($"Capa de {jogo.Titulo}")" />
+                                }
+
+                                <div class="admin-game-info">
+                                    <h3>@jogo.Titulo</h3>
+                                    <p>@NomeGenero(jogo.Genero)</p>
+                                    <p>@jogo.Preco.ToString("C", CulturaBrasileira)</p>
+
+                                    <span class="admin-status @(jogo.Ativo ? "ativo" : "inativo")">
+                                        @(jogo.Ativo ? "Ativo" : "Inativo")
+                                    </span>
+
+                                    <div class="admin-game-actions">
+                                        <button class="admin-secondary-button"
+                                                type="button"
+                                                @onclick="() => PrepararEdicao(jogo)">
+                                            Editar
+                                        </button>
+
+                                        @if (jogo.Ativo)
+                                        {
+                                            <button class="admin-danger-button"
+                                                    type="button"
+                                                    @onclick="() => SolicitarDesativacao(jogo)">
+                                                Desativar
+                                            </button>
+                                        }
+                                    </div>
+                                </div>
+
+                                @if (JogoParaDesativar?.Id == jogo.Id)
+                                {
+                                    <div class="admin-confirm-row">
+                                        <p>Confirma a desativação de <strong>@jogo.Titulo</strong>?</p>
+                                        <button class="admin-danger-button"
+                                                type="button"
+                                                @onclick="DesativarAsync"
+                                                disabled="@Salvando">
+                                            Confirmar
+                                        </button>
+                                        <button class="admin-secondary-button"
+                                                type="button"
+                                                @onclick="CancelarDesativacao">
+                                            Cancelar
+                                        </button>
+                                    </div>
+                                }
+                            </article>
+                        }
+                    </div>
+                }
+            </section>
+        </div>
+    }
+</div>
+
+@code {
+    private static readonly System.Globalization.CultureInfo CulturaBrasileira = new("pt-BR");
+
+    private bool VerificacaoConcluida;
+    private bool PodeAcessar;
+    private bool Carregando;
+    private bool Salvando;
+    private bool ImagemComErro;
+
+    private string Busca = string.Empty;
+    private string? MensagemSucesso;
+    private string? MensagemErro;
+
+    private List<JogoResponseDto> Jogos = [];
+    private JogoResponseDto? JogoEmEdicao;
+    private JogoResponseDto? JogoParaDesativar;
+    private JogoFormModel Formulario = new();
+    private bool EnviandoImagem;
+
+    private bool UrlImagemValida =>
+        Uri.TryCreate(Formulario.ImagemUrl, UriKind.Absolute, out var uri) &&
+        (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
+
+    private List<JogoResponseDto> JogosFiltrados => Jogos
+        .Where(j => string.IsNullOrWhiteSpace(Busca) ||
+                    j.Titulo.Contains(Busca.Trim(), StringComparison.OrdinalIgnoreCase))
+        .OrderBy(j => j.Titulo)
+        .ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        PodeAcessar = AuthSession.IsAuthenticated && AuthSession.Tipo == 1;
+        VerificacaoConcluida = true;
+
+        if (PodeAcessar)
+        {
+            await CarregarJogosAsync();
+        }
+    }
+
+    private async Task CarregarJogosAsync()
+    {
+        if (!PodeAcessar || Carregando)
+            return;
+
+        Carregando = true;
+        MensagemErro = null;
+
+        try
+        {
+            var resposta = await CatalogoService.ObterJogosAsync(
+                pagina: 1,
+                tamanhoPagina: 100);
+
+            Jogos = resposta.Itens.ToList();
+        }
+        catch (HttpRequestException ex)
+        {
+            MensagemErro = MensagemHttp(
+                ex,
+                "Não foi possível carregar os jogos. Confira se a API de catálogo está ativa.");
+        }
+        catch (Exception)
+        {
+            MensagemErro = "Ocorreu um erro ao carregar os jogos.";
+        }
+        finally
+        {
+            Carregando = false;
+        }
+    }
+
+    private void NovoJogo()
+    {
+        JogoEmEdicao = null;
+        JogoParaDesativar = null;
+        Formulario = new JogoFormModel();
+        ImagemComErro = false;
+        MensagemErro = null;
+        MensagemSucesso = null;
+    }
+
+    private void PrepararEdicao(JogoResponseDto jogo)
+    {
+        JogoEmEdicao = jogo;
+        JogoParaDesativar = null;
+        ImagemComErro = false;
+
+        Formulario = new JogoFormModel
+        {
+            Titulo = jogo.Titulo,
+            Descricao = jogo.Descricao,
+            Genero = jogo.Genero,
+            Preco = jogo.Preco,
+            DataLancamento = jogo.DataLancamento,
+            ImagemUrl = jogo.ImagemUrl
+        };
+
+        MensagemErro = null;
+        MensagemSucesso = null;
+    }
+
+    private async Task SalvarAsync()
+    {
+        if (!PodeAcessar || Salvando)
+            return;
+
+        Salvando = true;
+        MensagemErro = null;
+        MensagemSucesso = null;
+
+        try
+        {
+            var imagemUrl = string.IsNullOrWhiteSpace(Formulario.ImagemUrl)
+                ? null
+                : Formulario.ImagemUrl.Trim();
+
+            if (JogoEmEdicao is null)
+            {
+                var dto = new CriarJogoRequestDto(
+                    Formulario.Titulo.Trim(),
+                    Formulario.Descricao.Trim(),
+                    Formulario.Genero,
+                    Formulario.Preco,
+                    Formulario.DataLancamento,
+                    imagemUrl);
+
+                await AdminJogosService.CriarAsync(dto);
+                MensagemSucesso = "Jogo cadastrado com sucesso.";
+            }
+            else
+            {
+                var dto = new AtualizarJogoRequestDto(
+                    Formulario.Titulo.Trim(),
+                    Formulario.Descricao.Trim(),
+                    Formulario.Genero,
+                    Formulario.Preco,
+                    imagemUrl);
+
+                await AdminJogosService.AtualizarAsync(JogoEmEdicao.Id, dto);
+                MensagemSucesso = "Jogo atualizado com sucesso.";
+            }
+
+            JogoEmEdicao = null;
+            Formulario = new JogoFormModel();
+            ImagemComErro = false;
+            await CarregarJogosAsync();
+        }
+        catch (HttpRequestException ex)
+        {
+            MensagemErro = MensagemHttp(ex, "Não foi possível salvar o jogo.");
+        }
+        catch (Exception)
+        {
+            MensagemErro = "Ocorreu um erro inesperado ao salvar o jogo.";
+        }
+        finally
+        {
+            Salvando = false;
+        }
+    }
+
+    private Task AoAlterarImagemUrl(string? valor)
+    {
+        Formulario.ImagemUrl = valor;
+        ImagemComErro = false;
+        return Task.CompletedTask;
+    }
+
+private async Task AoSelecionarImagemAsync(InputFileChangeEventArgs e)
+{
+    if (!PodeAcessar || EnviandoImagem)
+        return;
+
+    MensagemErro = null;
+    MensagemSucesso = null;
+    EnviandoImagem = true;
+
+    try
+    {
+        var arquivo = e.File;
+
+        var imagemUrl = await AdminJogosService.UploadImagemAsync(arquivo);
+
+        Formulario.ImagemUrl = imagemUrl;
+        ImagemComErro = false;
+
+        MensagemSucesso = "Imagem enviada com sucesso. Salve o jogo para registrar a alteração.";
+    }
+    catch (HttpRequestException ex)
+    {
+        MensagemErro = MensagemHttp(
+            ex,
+            "Não foi possível enviar a imagem. Confira se a API de catálogo está ativa.");
+    }
+    catch (Exception ex)
+    {
+        MensagemErro = ex.Message;
+    }
+    finally
+    {
+        EnviandoImagem = false;
+    }
+}
+
+    private void ImagemPreviewFalhou()
+    {
+        ImagemComErro = true;
+    }
+
+    private void SolicitarDesativacao(JogoResponseDto jogo)
+    {
+        JogoParaDesativar = jogo;
+        MensagemErro = null;
+        MensagemSucesso = null;
+    }
+
+    private void CancelarDesativacao() => JogoParaDesativar = null;
+
+    private async Task DesativarAsync()
+    {
+        if (!PodeAcessar || Salvando || JogoParaDesativar is null)
+            return;
+
+        var jogo = JogoParaDesativar;
+        Salvando = true;
+        MensagemErro = null;
+
+        try
+        {
+            await AdminJogosService.DesativarAsync(jogo.Id);
+            JogoParaDesativar = null;
+            MensagemSucesso = $"O jogo '{jogo.Titulo}' foi desativado.";
+            await CarregarJogosAsync();
+        }
+        catch (HttpRequestException ex)
+        {
+            MensagemErro = MensagemHttp(ex, "Não foi possível desativar o jogo.");
+        }
+        catch (Exception)
+        {
+            MensagemErro = "Ocorreu um erro ao desativar o jogo.";
+        }
+        finally
+        {
+            Salvando = false;
+        }
+    }
+
+    private static string NomeGenero(int genero) => genero switch
+    {
+        0 => "Ação",
+        1 => "Aventura",
+        2 => "RPG",
+        3 => "Estratégia",
+        4 => "Esporte",
+        5 => "Corrida",
+        6 => "Simulação",
+        7 => "Puzzle",
+        8 => "FPS",
+        9 => "MOBA",
+        10 => "Educacional",
+        11 => "Outro",
+        _ => "Não definido"
+    };
+
+    private static string MensagemHttp(HttpRequestException ex, string padrao) =>
+        ex.StatusCode switch
+        {
+            HttpStatusCode.Unauthorized =>
+                "Sessão não reconhecida. Entre novamente.",
+            HttpStatusCode.Forbidden =>
+                "A API recusou a operação. Confirme se sua conta é administradora.",
+            HttpStatusCode.Conflict =>
+                "Conflito com os dados atuais. Atualize a lista e tente novamente.",
+            HttpStatusCode.BadRequest =>
+                "A API rejeitou os dados enviados. Revise o formulário.",
+            _ => padrao
+        };
+
+    private void VoltarAoCatalogo() => Navigation.NavigateTo("/catalogo");
+
+    private sealed class JogoFormModel
+    {
+        [Required(ErrorMessage = "Informe o título.")]
+        [StringLength(120, MinimumLength = 2,
+            ErrorMessage = "O título deve ter entre 2 e 120 caracteres.")]
+        public string Titulo { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "Informe a descrição.")]
+        [StringLength(2000, MinimumLength = 5,
+            ErrorMessage = "A descrição deve ter entre 5 e 2000 caracteres.")]
+        public string Descricao { get; set; } = string.Empty;
+
+        [Range(0, 11, ErrorMessage = "Selecione um gênero válido.")]
+        public int Genero { get; set; }
+
+        [Range(0.01, 999999.99,
+            ErrorMessage = "Informe um preço maior que zero.")]
+        public decimal Preco { get; set; } = 49.90m;
+
+        [Required(ErrorMessage = "Informe a data de lançamento.")]
+        public DateTime DataLancamento { get; set; } = DateTime.Today;
+
+        [Url(ErrorMessage = "Informe uma URL válida para a imagem.")]
+        public string? ImagemUrl { get; set; }
+    }
+}

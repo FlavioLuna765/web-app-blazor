@@ -1,0 +1,187 @@
+﻿@page "/carrinho"
+
+@using Fcg.Web.DTOs.Catalogo
+@using Fcg.Web.Services.Carrinho
+
+@inject ICarrinhoService CarrinhoService
+@inject NavigationManager Navigation
+
+<PageTitle>Carrinho - FCG</PageTitle>
+
+<div class="cart-page">
+
+    <div class="cart-header">
+        <div>
+            <span class="section-label">FCG STORE</span>
+            <h1>Seu carrinho</h1>
+            <p>Revise os jogos selecionados antes de continuar para a compra.</p>
+        </div>
+    </div>
+
+    @if (CarrinhoService.Quantidade == 0)
+    {
+        <section class="cart-empty">
+            <div class="cart-empty-icon">
+                🛒
+            </div>
+
+            <h2>Seu carrinho está vazio</h2>
+            <p>Explore nosso catálogo e adicione seus jogos favoritos.</p>
+
+            <button
+                type="button"
+                class="primary-button"
+                @onclick="IrParaCatalogo">
+                Explorar catálogo
+            </button>
+        </section>
+    }
+    else
+    {
+        <div class="cart-content">
+
+            <section class="cart-items">
+
+                <div class="cart-items-header">
+                    <h2>Jogos selecionados</h2>
+
+                    <span>
+                        @CarrinhoService.Quantidade
+                        @(CarrinhoService.Quantidade == 1 ? "item" : "itens")
+                    </span>
+                </div>
+
+                @foreach (var jogo in CarrinhoService.Itens)
+                {
+                    <article class="cart-item" @key="jogo.Id">
+
+                        <div class="cart-item-cover">
+                            @if (!string.IsNullOrWhiteSpace(jogo.ImagemUrl))
+                            {
+                                <img
+                                    src="@jogo.ImagemUrl"
+                                    alt="@($"Capa de {jogo.Titulo}")"
+                                    loading="lazy" />
+                            }
+                            else
+                            {
+                                <span class="cart-item-cover-placeholder">🎮</span>
+                            }
+                        </div>
+
+                        <div class="cart-item-info">
+                            <span class="cart-item-genre">
+                                @ObterNomeGenero(jogo.Genero)
+                            </span>
+
+                            <h3>@jogo.Titulo</h3>
+
+                            <p>@jogo.Descricao</p>
+                        </div>
+
+                        <div class="cart-item-price">
+                            <strong>@jogo.Preco.ToString("C")</strong>
+
+                            <button
+                                type="button"
+                                class="remove-button"
+                                @onclick="() => Remover(jogo.Id)">
+                                Remover
+                            </button>
+                        </div>
+
+                    </article>
+                }
+
+                <button
+                    type="button"
+                    class="clear-cart-button"
+                    @onclick="LimparCarrinho">
+                    🗑️ Limpar carrinho
+                </button>
+
+            </section>
+
+            <aside class="cart-summary">
+
+                <h2>Resumo da compra</h2>
+
+                <div class="summary-row">
+                    <span>Itens</span>
+                    <strong>@CarrinhoService.Quantidade</strong>
+                </div>
+
+                <div class="summary-row">
+                    <span>Subtotal</span>
+                    <strong>@CarrinhoService.Total.ToString("C")</strong>
+                </div>
+
+                <div class="summary-divider"></div>
+
+                <div class="summary-total">
+                    <span>Total</span>
+                    <strong>@CarrinhoService.Total.ToString("C")</strong>
+                </div>
+
+                <button
+                    type="button"
+                    class="checkout-button"
+                    @onclick="IrParaCheckout">
+                    Continuar para checkout
+                </button>
+
+                <button
+                    type="button"
+                    class="continue-button"
+                    @onclick="IrParaCatalogo">
+                    Continuar comprando
+                </button>
+
+            </aside>
+
+        </div>
+    }
+
+</div>
+
+@code {
+    private void Remover(string jogoId)
+    {
+        CarrinhoService.Remover(jogoId);
+    }
+
+    private void LimparCarrinho()
+    {
+        CarrinhoService.Limpar();
+    }
+
+    private void IrParaCatalogo()
+    {
+        Navigation.NavigateTo("/catalogo");
+    }
+
+    private void IrParaCheckout()
+    {
+        Navigation.NavigateTo("/checkout");
+    }
+
+    private static string ObterNomeGenero(int genero)
+    {
+        return genero switch
+        {
+            0 => "Ação",
+            1 => "Aventura",
+            2 => "RPG",
+            3 => "Estratégia",
+            4 => "Esporte",
+            5 => "Corrida",
+            6 => "Simulação",
+            7 => "Puzzle",
+            8 => "FPS",
+            9 => "MOBA",
+            10 => "Educacional",
+            11 => "Outro",
+            _ => "Jogo"
+        };
+    }
+}

@@ -1,0 +1,35 @@
+﻿# Compilação .NET
+bin/
+obj/
+[Bb]uild/
+[Oo]ut/
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# IDEs
+.idea/
+
+# Segredos e configurações locais
+.env
+.env.*
+!.env.example
+appsettings.Development.json
+secrets.json
+
+# Testes e arquivos temporários
+TestResults/
+*.tmp
+*.log
+
+# Backups locais
+*.bak
+*.backup-*
+
+# Páginas de exemplo do Blazor
+/Pages/Counter.razor
+/Pages/Weather.razor

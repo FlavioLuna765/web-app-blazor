@@ -1,0 +1,84 @@
+﻿@inherits LayoutComponentBase
+
+<div class="page">
+
+    <header class="site-header">
+        <NavMenu />
+    </header>
+
+    <main class="site-main">
+        <article class="content">
+            @Body
+        </article>
+    </main>
+
+    <footer class="site-footer">
+        <div class="footer-container">
+
+            <section class="footer-brand">
+                <div class="footer-logo">
+                    <span>FCG</span>
+                </div>
+
+                <h3>FIAP Cloud Games</h3>
+
+                <p>
+                    Seu próximo jogo favorito está aqui.
+                    Explore o catálogo, descubra novos mundos
+                    e aproveite sua biblioteca de jogos.
+                </p>
+            </section>
+
+            <section class="footer-column">
+                <h4>Navegação</h4>
+                <a href="/">Início</a>
+                <a href="/catalogo">Catálogo de jogos</a>
+                <a href="/carrinho">Meu carrinho</a>
+                <a href="/biblioteca">Minha biblioteca</a>
+                <a href="/perfil">Meu perfil</a>
+            </section>
+
+            <section class="footer-column">
+                <h4>Links úteis</h4>
+                <a href="https://www.fiap.com.br/"
+                   target="_blank"
+                   rel="noopener noreferrer">
+                    FIAP
+                </a>
+
+                <a href="https://www.alura.com.br/"
+                   target="_blank"
+                   rel="noopener noreferrer">
+                    Alura
+                </a>
+            </section>
+
+            <section class="footer-column">
+                <h4>Contato</h4>
+
+                <p>
+                    Precisa de ajuda? Acesse o WhatsApp
+                    para conhecer as opções de contato.
+                </p>
+
+                <a href="https://www.whatsapp.com/"
+                   target="_blank"
+                   rel="noopener noreferrer">
+                    WhatsApp
+                </a>
+            </section>
+
+        </div>
+
+        <div class="footer-bottom">
+            <span>
+                © @DateTime.Now.Year FCG Store. Todos os direitos reservados.
+            </span>
+
+            <span>
+                Desenvolvido com tecnologia .NET
+            </span>
+        </div>
+    </footer>
+
+</div>

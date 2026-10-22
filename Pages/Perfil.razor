@@ -1,0 +1,436 @@
+﻿@page "/perfil"
+
+@using System.ComponentModel.DataAnnotations
+@using System.Net
+@using Microsoft.AspNetCore.Components.Forms
+@using Fcg.Web.DTOs.Usuario
+@using Fcg.Web.Services.Perfil
+@using Fcg.Web.Services.Usuario
+
+@inject IPerfilService PerfilService
+@inject IUsuarioAtualService UsuarioAtualService
+@inject NavigationManager Navigation
+
+<PageTitle>Meu Perfil - FCG Store</PageTitle>
+
+<div class="profile-page">
+    <div class="profile-container">
+        <header class="profile-header">
+            <div>
+                <span class="profile-eyebrow">SUA CONTA FCG</span>
+                <h1>Meu <span>Perfil</span></h1>
+                <p>Gerencie suas informações pessoais e os dados da sua conta.</p>
+            </div>
+
+            <a class="profile-back-link" href="/biblioteca">
+                <span aria-hidden="true">←</span>
+                Minha biblioteca
+            </a>
+        </header>
+
+        @if (carregando)
+        {
+            <section class="profile-state-card">
+                <div class="profile-spinner"></div>
+                <h2>Carregando seu perfil...</h2>
+                <p>Estamos buscando suas informações.</p>
+            </section>
+        }
+        else if (!string.IsNullOrWhiteSpace(erro))
+        {
+            <section class="profile-state-card profile-error-card">
+                <div class="profile-state-icon" aria-hidden="true">!</div>
+                <h2>Não foi possível carregar seu perfil</h2>
+                <p>@erro</p>
+                <button type="button"
+                        class="profile-primary-button"
+                        @onclick="CarregarPerfilAsync">
+                    Tentar novamente
+                </button>
+            </section>
+        }
+        else if (usuario is not null)
+        {
+            <div class="profile-layout">
+                <aside class="profile-summary-card">
+                    <div class="profile-avatar">
+                        @if (!string.IsNullOrWhiteSpace(usuario.FotoUrl))
+                        {
+                            <img src="@usuario.FotoUrl"
+                                 alt="Foto de perfil de @usuario.Nome"
+                                 class="profile-avatar-image" />
+                        }
+                        else
+                        {
+                            <span aria-hidden="true">@InicialNome</span>
+                        }
+                    </div>
+
+                    <div class="profile-photo-actions">
+                        <label class="profile-photo-label">
+                            @(enviandoFoto ? "Enviando foto..." : "Alterar foto")
+                            <InputFile OnChange="EnviarFotoAsync"
+                                       accept="image/png,image/jpeg,image/webp"
+                                       disabled="@enviandoFoto"
+                                       class="profile-file-input" />
+                        </label>
+
+                        <span class="profile-photo-hint">
+                            PNG, JPEG ou WebP. Máximo de 5 MB.
+                        </span>
+                    </div>
+
+                    @if (!string.IsNullOrWhiteSpace(sucessoFoto))
+                    {
+                        <div class="profile-alert profile-success" role="status">
+                            <span aria-hidden="true">✓</span>
+                            @sucessoFoto
+                        </div>
+                    }
+
+                    @if (!string.IsNullOrWhiteSpace(erroFoto))
+                    {
+                        <div class="profile-alert profile-error" role="alert">
+                            <span aria-hidden="true">!</span>
+                            @erroFoto
+                        </div>
+                    }
+
+                    <h2>@usuario.Nome</h2>
+                    <p class="profile-summary-email">@usuario.Email</p>
+
+                    <span class="profile-role-badge">
+                        @(usuario.Tipo == 1 ? "Administrador" : "Usuário")
+                    </span>
+
+                    <div class="profile-summary-divider"></div>
+
+                    <div class="profile-summary-item">
+                        <span class="profile-summary-label">STATUS DA CONTA</span>
+                        <span class="profile-status @(usuario.Ativo ? "status-active" : "status-inactive")">
+                            <span class="profile-status-dot"></span>
+                            @(usuario.Ativo ? "Ativa" : "Inativa")
+                        </span>
+                    </div>
+
+                    <div class="profile-summary-item">
+                        <span class="profile-summary-label">MEMBRO DESDE</span>
+                        <strong>@usuario.DataCriacao.ToString("dd/MM/yyyy")</strong>
+                    </div>
+                </aside>
+
+                <section class="profile-form-card">
+                    <div class="profile-card-heading">
+                        <div class="profile-heading-icon" aria-hidden="true">✎</div>
+                        <div>
+                            <h2>Informações pessoais</h2>
+                            <p>Mantenha seus dados atualizados.</p>
+                        </div>
+                    </div>
+
+                    @if (!string.IsNullOrWhiteSpace(sucesso))
+                    {
+                        <div class="profile-alert profile-success" role="status">
+                            <span aria-hidden="true">✓</span>
+                            @sucesso
+                        </div>
+                    }
+
+                    @if (!string.IsNullOrWhiteSpace(erroSalvar))
+                    {
+                        <div class="profile-alert profile-error" role="alert">
+                            <span aria-hidden="true">!</span>
+                            @erroSalvar
+                        </div>
+                    }
+
+                    <EditForm Model="formulario" OnValidSubmit="SalvarAsync">
+                        <DataAnnotationsValidator />
+
+                        <div class="profile-field">
+                            <label for="profile-name">Nome completo</label>
+                            <InputText id="profile-name"
+                                       class="profile-input"
+                                       @bind-Value="formulario.Nome"
+                                       disabled="@salvando"
+                                       maxlength="120" />
+                            <ValidationMessage For="@(() => formulario.Nome)" />
+                        </div>
+
+                        <div class="profile-field">
+                            <label for="profile-email">E-mail</label>
+                            <InputText id="profile-email"
+                                       class="profile-input"
+                                       type="email"
+                                       @bind-Value="formulario.Email"
+                                       disabled="@salvando"
+                                       maxlength="180" />
+                            <ValidationMessage For="@(() => formulario.Email)" />
+                        </div>
+
+                        <div class="profile-form-note">
+                            <span aria-hidden="true">ⓘ</span>
+                            Seus dados serão atualizados na sua conta FCG.
+                        </div>
+
+                        <div class="profile-form-actions">
+                            <button type="submit"
+                                    class="profile-primary-button"
+                                    disabled="@salvando">
+                                @if (salvando)
+                                {
+                                    <span class="profile-button-spinner"></span>
+                                    <span>Salvando...</span>
+                                }
+                                else
+                                {
+                                    <span>Salvar alterações</span>
+                                    <span aria-hidden="true">→</span>
+                                }
+                            </button>
+                        </div>
+                    </EditForm>
+                </section>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private const long TamanhoMaximoFoto = 5 * 1024 * 1024;
+
+    private static readonly HashSet<string> TiposImagemPermitidos =
+    [
+        "image/png",
+        "image/jpeg",
+        "image/webp"
+    ];
+
+    private UsuarioResponseDto? usuario;
+    private PerfilFormulario formulario = new();
+
+    private bool carregando = true;
+    private bool salvando;
+    private bool enviandoFoto;
+
+    private string? erro;
+    private string? erroSalvar;
+    private string? sucesso;
+    private string? erroFoto;
+    private string? sucessoFoto;
+
+    private string InicialNome =>
+        string.IsNullOrWhiteSpace(usuario?.Nome)
+            ? "F"
+            : usuario.Nome.Trim()[0].ToString().ToUpperInvariant();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CarregarPerfilAsync();
+    }
+
+    private async Task CarregarPerfilAsync()
+    {
+        carregando = true;
+        erro = null;
+
+        try
+        {
+            var usuarioId = UsuarioAtualService.ObterId();
+
+            if (string.IsNullOrWhiteSpace(usuarioId))
+            {
+                Navigation.NavigateTo("/login");
+                return;
+            }
+
+            usuario = await PerfilService.ObterAsync(usuarioId);
+
+            formulario = new PerfilFormulario
+            {
+                Nome = usuario.Nome,
+                Email = usuario.Email
+            };
+        }
+        catch (HttpRequestException)
+        {
+            erro = "Não foi possível comunicar com a API de usuários. Verifique se o backend está em execução e tente novamente.";
+        }
+        catch (InvalidOperationException ex)
+        {
+            erro = ex.Message;
+        }
+        finally
+        {
+            carregando = false;
+        }
+    }
+
+    private async Task EnviarFotoAsync(InputFileChangeEventArgs args)
+    {
+        if (usuario is null || enviandoFoto)
+            return;
+
+        erroFoto = null;
+        sucessoFoto = null;
+
+        var arquivo = args.File;
+
+        if (arquivo.Size == 0)
+        {
+            erroFoto = "O arquivo selecionado está vazio.";
+            return;
+        }
+
+        if (arquivo.Size > TamanhoMaximoFoto)
+        {
+            erroFoto = "A foto deve ter no máximo 5 MB.";
+            return;
+        }
+
+        if (!TiposImagemPermitidos.Contains(arquivo.ContentType))
+        {
+            erroFoto = "Selecione uma imagem PNG, JPEG ou WebP.";
+            return;
+        }
+
+        enviandoFoto = true;
+
+        try
+        {
+            var usuarioId = UsuarioAtualService.ObterId();
+
+            if (string.IsNullOrWhiteSpace(usuarioId))
+            {
+                Navigation.NavigateTo("/login");
+                return;
+            }
+
+            var usuarioAtualizado = await PerfilService.AtualizarFotoAsync(
+                usuarioId,
+                arquivo);
+
+            usuario = usuarioAtualizado;
+
+            sucessoFoto = "Sua foto de perfil foi atualizada com sucesso.";
+        }
+        catch (HttpRequestException ex)
+        {
+            erroFoto = ex.StatusCode switch
+            {
+                HttpStatusCode.BadRequest =>
+                    "A API não aceitou a imagem. Selecione um PNG, JPEG ou WebP válido de até 5 MB.",
+
+                HttpStatusCode.Unauthorized =>
+                    "Sua sessão expirou. Entre novamente para continuar.",
+
+                HttpStatusCode.Forbidden =>
+                    "Você não tem permissão para alterar esta foto.",
+
+                HttpStatusCode.NotFound =>
+                    "Não foi possível encontrar a conta para atualizar a foto.",
+
+                _ =>
+                    "Não foi possível enviar a foto. Verifique se a API de usuários está em execução e tente novamente."
+            };
+
+            if (ex.StatusCode == HttpStatusCode.Unauthorized)
+                Navigation.NavigateTo("/login");
+        }
+        catch (InvalidOperationException ex)
+        {
+            erroFoto = ex.Message;
+        }
+        catch (IOException)
+        {
+            erroFoto = "Não foi possível ler o arquivo selecionado. Tente outra imagem.";
+        }
+        finally
+        {
+            enviandoFoto = false;
+        }
+    }
+
+    private async Task SalvarAsync()
+    {
+        if (usuario is null || salvando)
+            return;
+
+        salvando = true;
+        erroSalvar = null;
+        sucesso = null;
+
+        try
+        {
+            var usuarioId = UsuarioAtualService.ObterId();
+
+            if (string.IsNullOrWhiteSpace(usuarioId))
+            {
+                Navigation.NavigateTo("/login");
+                return;
+            }
+
+            var request = new AtualizarUsuarioRequestDto(
+                formulario.Nome.Trim(),
+                formulario.Email.Trim());
+
+            usuario = await PerfilService.AtualizarAsync(usuarioId, request);
+
+            formulario = new PerfilFormulario
+            {
+                Nome = usuario.Nome,
+                Email = usuario.Email
+            };
+
+            sucesso = "Suas informações foram atualizadas com sucesso.";
+        }
+        catch (HttpRequestException ex)
+        {
+            erroSalvar = ex.StatusCode switch
+            {
+                HttpStatusCode.BadRequest =>
+                    "Os dados informados não foram aceitos. Confira o nome e o e-mail.",
+
+                HttpStatusCode.Conflict =>
+                    "Este e-mail já está sendo utilizado por outra conta.",
+
+                HttpStatusCode.Unauthorized =>
+                    "Sua sessão expirou. Entre novamente para continuar.",
+
+                HttpStatusCode.Forbidden =>
+                    "Você não tem permissão para alterar este perfil.",
+
+                _ =>
+                    "Não foi possível salvar as alterações. Confira sua conexão e tente novamente."
+            };
+
+            if (ex.StatusCode == HttpStatusCode.Unauthorized)
+                Navigation.NavigateTo("/login");
+        }
+        catch (InvalidOperationException ex)
+        {
+            erroSalvar = ex.Message;
+        }
+        finally
+        {
+            salvando = false;
+        }
+    }
+
+    private sealed class PerfilFormulario
+    {
+        [Required(ErrorMessage = "Informe seu nome.")]
+        [StringLength(
+            120,
+            MinimumLength = 2,
+            ErrorMessage = "O nome deve ter entre 2 e 120 caracteres.")]
+        public string Nome { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "Informe seu e-mail.")]
+        [EmailAddress(ErrorMessage = "Informe um e-mail válido.")]
+        [StringLength(
+            180,
+            ErrorMessage = "O e-mail deve ter no máximo 180 caracteres.")]
+        public string Email { get; set; } = string.Empty;
+    }
+}

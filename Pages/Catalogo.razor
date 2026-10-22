@@ -1,0 +1,241 @@
+@page "/catalogo"
+
+@using Fcg.Web.DTOs.Catalogo
+@using Fcg.Web.Services.Catalogo
+
+@inject ICatalogoService CatalogoService
+@inject NavigationManager Navigation
+
+<PageTitle>Catálogo - FCG</PageTitle>
+
+<div class="catalog-page">
+
+<div class="catalog-header">
+    <div>
+        <span class="section-label">FCG STORE</span>
+
+        <h1>Catálogo de jogos</h1>
+
+        <p>
+            Explore nossa coleção de jogos e encontre seu próximo título.
+        </p>
+    </div>
+</div>
+
+@if (_carregando)
+{
+    <div class="catalog-status">
+        <div class="loading-spinner"></div>
+        <span>Carregando jogos...</span>
+    </div>
+}
+else if (!string.IsNullOrWhiteSpace(_erro))
+{
+    <div class="catalog-status error">
+        <strong>Não foi possível carregar o catálogo.</strong>
+
+        <span>@_erro</span>
+
+        <button type="button" @onclick="CarregarJogosAsync">
+            Tentar novamente
+        </button>
+    </div>
+}
+else
+{
+    <div class="catalog-toolbar">
+
+        <div class="search-box">
+            <span>🔎</span>
+
+            <input
+                type="text"
+                placeholder="Buscar jogo..."
+                @bind="_busca" />
+        </div>
+
+        <select
+            class="category-select"
+            @bind="_generoSelecionado">
+
+            <option value="">Todos os gêneros</option>
+            <option value="0">Ação</option>
+            <option value="1">Aventura</option>
+            <option value="2">RPG</option>
+            <option value="3">Estratégia</option>
+            <option value="4">Esporte</option>
+            <option value="5">Corrida</option>
+            <option value="6">Simulação</option>
+            <option value="7">Puzzle</option>
+            <option value="8">FPS</option>
+            <option value="9">MOBA</option>
+            <option value="10">Educacional</option>
+            <option value="11">Outro</option>
+
+        </select>
+
+    </div>
+
+    @if (_jogos.Count == 0)
+    {
+        <div class="catalog-status">
+            <strong>Nenhum jogo encontrado.</strong>
+
+            <span>
+                Não existem jogos disponíveis no catálogo no momento.
+            </span>
+        </div>
+    }
+    else if (!JogosFiltrados.Any())
+    {
+        <div class="catalog-status">
+            <strong>Nenhum jogo corresponde à busca.</strong>
+
+            <span>
+                Tente alterar o texto da busca ou selecionar outro gênero.
+            </span>
+        </div>
+    }
+    else
+    {
+        <div class="games-grid">
+
+            @foreach (var jogo in JogosFiltrados)
+            {
+                <article class="game-card">
+
+                    <div class="game-cover">
+                        @if (!string.IsNullOrWhiteSpace(jogo.ImagemUrl))
+                        {
+                            <img src="@jogo.ImagemUrl"
+                                alt="@($"Capa de {jogo.Titulo}")"
+                                loading="lazy" />
+                        }
+                        else
+                        {
+                            <span class="game-cover-placeholder">🎮</span>
+                        }
+                    </div>
+
+                    <div class="game-info">
+
+                        <span class="game-genre">
+                            @ObterNomeGenero(jogo.Genero)
+                        </span>
+
+                        <h2>@jogo.Titulo</h2>
+
+                        <p>
+                            @jogo.Descricao
+                        </p>
+
+                        <div class="game-footer">
+
+                            <strong>
+                                @jogo.Preco.ToString("C")
+                            </strong>
+
+                            <button
+                                type="button"
+                                @onclick="() => AbrirDetalhes(jogo.Id)">
+                                Ver detalhes
+                            </button>
+
+                        </div>
+
+                    </div>
+
+                </article>
+            }
+
+        </div>
+    }
+}
+
+</div>
+
+@code {
+private readonly List<JogoResponseDto> _jogos = [];
+
+
+private bool _carregando;
+private string? _erro;
+private string _busca = string.Empty;
+private string _generoSelecionado = string.Empty;
+
+private IEnumerable<JogoResponseDto> JogosFiltrados =>
+    _jogos.Where(jogo =>
+        (string.IsNullOrWhiteSpace(_busca)
+            || jogo.Titulo.Contains(
+                _busca,
+                StringComparison.OrdinalIgnoreCase)
+            || jogo.Descricao.Contains(
+                _busca,
+                StringComparison.OrdinalIgnoreCase))
+        &&
+        (string.IsNullOrWhiteSpace(_generoSelecionado)
+            || jogo.Genero.ToString() == _generoSelecionado));
+
+protected override async Task OnInitializedAsync()
+{
+    await CarregarJogosAsync();
+}
+
+private async Task CarregarJogosAsync()
+{
+    if (_carregando)
+        return;
+
+    _carregando = true;
+    _erro = null;
+
+    try
+    {
+        var resultado = await CatalogoService.ObterJogosAsync(
+            pagina: 1,
+            tamanhoPagina: 50);
+
+        _jogos.Clear();
+        _jogos.AddRange(resultado.Itens);
+    }
+    catch (HttpRequestException)
+    {
+        _erro = "Não foi possível conectar ao catálogo.";
+    }
+    catch (Exception ex)
+    {
+        _erro = ex.Message;
+    }
+    finally
+    {
+        _carregando = false;
+    }
+}
+
+private static string ObterNomeGenero(int genero)
+{
+    return genero switch
+    {
+        0 => "Ação",
+        1 => "Aventura",
+        2 => "RPG",
+        3 => "Estratégia",
+        4 => "Esporte",
+        5 => "Corrida",
+        6 => "Simulação",
+        7 => "Puzzle",
+        8 => "FPS",
+        9 => "MOBA",
+        10 => "Educacional",
+        11 => "Outro",
+        _ => "Jogo"
+    };
+}
+
+private void AbrirDetalhes(string id)
+{
+    Navigation.NavigateTo($"/catalogo/{id}");
+}
+
+
+}

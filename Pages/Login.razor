@@ -1,0 +1,145 @@
+@page "/login"
+
+@using Fcg.Web.Services.Auth
+
+@inject IAuthService AuthService
+@inject IAuthSession AuthSession
+@inject AuthStorage AuthStorage
+@inject NavigationManager Navigation
+
+<PageTitle>Login - FCG</PageTitle>
+
+<div class="login-page">
+    <div class="login-card">
+
+        <div class="login-header">
+            <div class="login-logo">FCG</div>
+
+            <h1>Entrar</h1>
+            <p>Acesse sua conta para continuar.</p>
+        </div>
+
+        <EditForm Model="_model" OnValidSubmit="LoginAsync">
+            <DataAnnotationsValidator />
+
+            <div class="form-group">
+                <label for="email">E-mail</label>
+
+                <InputText
+                    id="email"
+                    class="form-control"
+                    @bind-Value="_model.Email"
+                    autocomplete="email"
+                    placeholder="seu@email.com" />
+
+                <ValidationMessage For="@(() => _model.Email)" />
+            </div>
+
+            <div class="form-group">
+                <label for="senha">Senha</label>
+
+                <InputText
+                    id="senha"
+                    type="password"
+                    class="form-control"
+                    @bind-Value="_model.Senha"
+                    autocomplete="current-password"
+                    placeholder="Sua senha" />
+
+                <ValidationMessage For="@(() => _model.Senha)" />
+            </div>
+
+            @if (!string.IsNullOrWhiteSpace(_erro))
+            {
+                <div class="error-message">
+                    @_erro
+                </div>
+            }
+
+            <button
+                type="submit"
+                class="login-button"
+                disabled="@_carregando">
+
+                @if (_carregando)
+                {
+                    <span>Entrando...</span>
+                }
+                else
+                {
+                    <span>Entrar</span>
+                }
+            </button>
+        </EditForm>
+
+        <div class="login-footer">
+            <span>Ainda n�o possui uma conta?</span>
+
+            <a href="/cadastro">Criar conta</a>
+        </div>
+
+    </div>
+</div>
+
+@code {
+    private readonly LoginModel _model = new();
+
+    private bool _carregando;
+    private string? _erro;
+
+    private async Task LoginAsync()
+    {
+        if (_carregando)
+            return;
+
+        _carregando = true;
+        _erro = null;
+
+        try
+        {
+            var tokenResponse = await AuthService.LoginAsync(
+                _model.Email,
+                _model.Senha);
+            AuthSession.SetSession(tokenResponse);
+            await AuthStorage.SaveAsync(tokenResponse);
+
+            Console.WriteLine(
+                $"[LOGIN] Token recebido: {!string.IsNullOrWhiteSpace(tokenResponse.Token)}");
+
+            Console.WriteLine(
+                $"[LOGIN] Token na sessão: {!string.IsNullOrWhiteSpace(AuthSession.Token)}");
+
+            Navigation.NavigateTo("/");
+            //AuthSession.SetSession(tokenResponse);
+
+            //await AuthStorage.SaveAsync(tokenResponse);
+
+            //Navigation.NavigateTo("/");
+        }
+        catch (HttpRequestException)
+        {
+            _erro = "N�o foi poss�vel conectar ao servidor.";
+        }
+        catch
+        {
+            _erro = "E-mail ou senha inv�lidos.";
+        }
+        finally
+        {
+            _carregando = false;
+        }
+    }
+
+    private sealed class LoginModel
+    {
+        [System.ComponentModel.DataAnnotations.Required(
+            ErrorMessage = "Informe o e-mail.")]
+        [System.ComponentModel.DataAnnotations.EmailAddress(
+            ErrorMessage = "Informe um e-mail v�lido.")]
+        public string Email { get; set; } = string.Empty;
+
+        [System.ComponentModel.DataAnnotations.Required(
+            ErrorMessage = "Informe a senha.")]
+        public string Senha { get; set; } = string.Empty;
+    }
+}

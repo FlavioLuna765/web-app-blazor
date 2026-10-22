@@ -1,0 +1,157 @@
+﻿@page "/biblioteca"
+
+@using Fcg.Web.DTOs.Catalogo
+@using Fcg.Web.Services.Biblioteca
+
+@inject IBibliotecaService BibliotecaService
+@inject NavigationManager Navigation
+
+<PageTitle>Minha Biblioteca - FCG Store</PageTitle>
+
+<div class="biblioteca-page">
+    <header class="biblioteca-header">
+        <div>
+            <span class="biblioteca-eyebrow">SUA COLEÇÃO</span>
+            <h1>Minha Biblioteca</h1>
+            <p>Todos os seus jogos adquiridos em um só lugar.</p>
+        </div>
+
+        <button class="biblioteca-catalogo-btn"
+                @onclick="IrParaCatalogo">
+            Explorar catálogo
+        </button>
+    </header>
+
+    @if (carregando)
+    {
+        <div class="biblioteca-feedback">
+            <div class="biblioteca-spinner"></div>
+            <p>Carregando sua biblioteca...</p>
+        </div>
+    }
+    else if (!string.IsNullOrWhiteSpace(erro))
+    {
+        <div class="biblioteca-feedback biblioteca-erro">
+            <h2>Não foi possível carregar sua biblioteca</h2>
+            <p>@erro</p>
+            <button class="biblioteca-catalogo-btn"
+                    @onclick="CarregarAsync">
+                Tentar novamente
+            </button>
+        </div>
+    }
+    else if (jogos.Count == 0)
+    {
+        <div class="biblioteca-vazia">
+            <div class="biblioteca-empty-icon">🎮</div>
+            <h2>Sua biblioteca está vazia</h2>
+            <p>Explore nosso catálogo e encontre seu próximo jogo favorito.</p>
+            <button class="biblioteca-catalogo-btn"
+                    @onclick="IrParaCatalogo">
+                Explorar jogos
+            </button>
+        </div>
+    }
+    else
+    {
+        <div class="biblioteca-resumo">
+            <span>Jogos na sua coleção</span>
+            <strong>@jogos.Count</strong>
+        </div>
+
+        <div class="biblioteca-grid">
+            @foreach (var jogo in jogos)
+            {
+                <article class="biblioteca-card" @key="jogo.Id">
+                    <div class="biblioteca-card-banner">
+                        @if (!string.IsNullOrWhiteSpace(jogo.ImagemUrl))
+                        {
+                            <img
+                                class="biblioteca-game-image"
+                                src="@jogo.ImagemUrl"
+                                alt="@($"Capa de {jogo.Titulo}")"
+                                loading="lazy" />
+                        }
+                        else
+                        {
+                            <span class="biblioteca-game-icon">🎮</span>
+                        }
+
+                        <span class="biblioteca-badge">ADQUIRIDO</span>
+                    </div>
+
+                    <div class="biblioteca-card-body">
+                        <h2>@jogo.Titulo</h2>
+
+                        <p class="biblioteca-descricao">
+                            @(string.IsNullOrWhiteSpace(jogo.Descricao)
+                                ? "Jogo disponível na sua coleção."
+                                : jogo.Descricao)
+                        </p>
+
+                        <div class="biblioteca-detalhes">
+                            <span>Lançamento</span>
+                            <strong>@jogo.DataLancamento.ToString("dd/MM/yyyy")</strong>
+                        </div>
+
+                        <div class="biblioteca-card-footer">
+                            <span class="biblioteca-status">
+                                <span class="biblioteca-status-dot"></span>
+                                Na sua biblioteca
+                            </span>
+                            <strong>@jogo.Preco.ToString("C")</strong>
+                        </div>
+                    </div>
+                </article>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private List<JogoResponseDto> jogos = [];
+    private bool carregando = true;
+    private string? erro;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CarregarAsync();
+    }
+
+    private async Task CarregarAsync()
+    {
+        carregando = true;
+        erro = null;
+
+        try
+        {
+            var resultado = await BibliotecaService.ListarAsync();
+            jogos = resultado.ToList();
+        }
+        catch (HttpRequestException ex)
+        {
+            erro = ex.StatusCode switch
+            {
+                System.Net.HttpStatusCode.Unauthorized =>
+                    "Sua sessão não está autenticada. Entre novamente na sua conta.",
+                System.Net.HttpStatusCode.Forbidden =>
+                    "Você não tem permissão para acessar esta biblioteca.",
+                _ =>
+                    "Verifique se as APIs estão em execução e tente novamente."
+            };
+        }
+        catch (Exception)
+        {
+            erro = "Ocorreu um erro inesperado ao consultar sua biblioteca.";
+        }
+        finally
+        {
+            carregando = false;
+        }
+    }
+
+    private void IrParaCatalogo()
+    {
+        Navigation.NavigateTo("/catalogo");
+    }
+}

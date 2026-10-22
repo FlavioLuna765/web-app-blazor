@@ -1,0 +1,259 @@
+﻿@page "/cadastro"
+
+@using System.ComponentModel.DataAnnotations
+@using Fcg.Web.DTOs.Usuario
+@using Fcg.Web.Services.Usuario
+
+@inject ICadastroUsuarioService CadastroUsuarioService
+@inject NavigationManager Navigation
+
+<PageTitle>Criar conta - FCG</PageTitle>
+
+<div class="cadastro-page">
+
+    <div class="cadastro-card">
+
+        <div class="cadastro-header">
+
+            <div class="cadastro-logo">
+                FCG
+            </div>
+
+            <h1>Criar conta</h1>
+
+            <p>
+                Crie sua conta para começar a jogar.
+            </p>
+
+        </div>
+
+        <EditForm Model="_model" OnValidSubmit="CadastrarAsync">
+
+            <DataAnnotationsValidator />
+
+            <div class="cadastro-form-group">
+
+                <label for="nome">
+                    Nome
+                </label>
+
+                <InputText
+                    id="nome"
+                    class="cadastro-form-control"
+                    @bind-Value="_model.Nome"
+                    autocomplete="name"
+                    placeholder="Seu nome" />
+
+                <ValidationMessage
+                    For="@(() => _model.Nome)"
+                    class="cadastro-validation-message" />
+
+            </div>
+
+            <div class="cadastro-form-group">
+
+                <label for="email">
+                    E-mail
+                </label>
+
+                <InputText
+                    id="email"
+                    class="cadastro-form-control"
+                    @bind-Value="_model.Email"
+                    autocomplete="email"
+                    placeholder="seu@email.com" />
+
+                <ValidationMessage
+                    For="@(() => _model.Email)"
+                    class="cadastro-validation-message" />
+
+            </div>
+
+            <div class="cadastro-form-group">
+
+                <label for="senha">
+                    Senha
+                </label>
+
+                <InputText
+                    id="senha"
+                    type="password"
+                    class="cadastro-form-control"
+                    @bind-Value="_model.Senha"
+                    autocomplete="new-password"
+                    placeholder="Crie uma senha segura" />
+
+                <ValidationMessage
+                    For="@(() => _model.Senha)"
+                    class="cadastro-validation-message" />
+
+                <small class="cadastro-help">
+                    Mínimo de 8 caracteres, com maiúscula,
+                    minúscula, número e caractere especial.
+                </small>
+
+            </div>
+
+            <div class="cadastro-form-group">
+
+                <label for="confirmarSenha">
+                    Confirmar senha
+                </label>
+
+                <InputText
+                    id="confirmarSenha"
+                    type="password"
+                    class="cadastro-form-control"
+                    @bind-Value="_model.ConfirmarSenha"
+                    autocomplete="new-password"
+                    placeholder="Digite a senha novamente" />
+
+                <ValidationMessage
+                    For="@(() => _model.ConfirmarSenha)"
+                    class="cadastro-validation-message" />
+
+            </div>
+
+            @if (!string.IsNullOrWhiteSpace(_erro))
+            {
+                <div class="cadastro-error-message">
+                    @_erro
+                </div>
+            }
+
+            @if (!string.IsNullOrWhiteSpace(_sucesso))
+            {
+                <div class="cadastro-success-message">
+                    @_sucesso
+                </div>
+            }
+
+            <button
+                type="submit"
+                class="cadastro-button"
+                disabled="@_carregando">
+
+                @if (_carregando)
+                {
+                    <span>Criando conta...</span>
+                }
+                else
+                {
+                    <span>Criar conta</span>
+                }
+
+            </button>
+
+        </EditForm>
+
+        <div class="cadastro-footer">
+
+            <span>
+                Já possui uma conta?
+            </span>
+
+            <a href="/login">
+                Entrar
+            </a>
+
+        </div>
+
+    </div>
+
+</div>
+
+@code {
+
+    private readonly CadastroModel _model = new();
+
+    private bool _carregando;
+
+    private string? _erro;
+
+    private string? _sucesso;
+
+    private async Task CadastrarAsync()
+    {
+        if (_carregando)
+            return;
+
+        _carregando = true;
+        _erro = null;
+        _sucesso = null;
+
+        try
+        {
+            var request = new CriarUsuarioRequestDto(
+                _model.Nome.Trim(),
+                _model.Email.Trim(),
+                _model.Senha);
+
+            await CadastroUsuarioService.CadastrarAsync(request);
+
+            _sucesso =
+                "Conta criada com sucesso! Redirecionando para o login...";
+
+            await Task.Delay(1200);
+
+            Navigation.NavigateTo("/login");
+        }
+        catch (HttpRequestException)
+        {
+            _erro =
+                "Não foi possível conectar ao servidor.";
+        }
+        catch (InvalidOperationException ex)
+        {
+            if (ex.Message.Contains(
+                    "409",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                _erro =
+                    "Este e-mail já está cadastrado.";
+            }
+            else
+            {
+                _erro = ex.Message;
+            }
+        }
+        catch
+        {
+            _erro =
+                "Não foi possível criar a conta.";
+        }
+        finally
+        {
+            _carregando = false;
+        }
+    }
+
+    private sealed class CadastroModel
+    {
+        [Required(
+            ErrorMessage = "Informe o nome.")]
+        [MaxLength(
+            150,
+            ErrorMessage = "O nome deve ter no máximo 150 caracteres.")]
+        public string Nome { get; set; } = string.Empty;
+
+        [Required(
+            ErrorMessage = "Informe o e-mail.")]
+        [EmailAddress(
+            ErrorMessage = "Informe um e-mail válido.")]
+        public string Email { get; set; } = string.Empty;
+
+        [Required(
+            ErrorMessage = "Informe a senha.")]
+        [MinLength(
+            8,
+            ErrorMessage = "A senha deve ter no mínimo 8 caracteres.")]
+        public string Senha { get; set; } = string.Empty;
+
+        [Required(
+            ErrorMessage = "Confirme a senha.")]
+        [Compare(
+            nameof(Senha),
+            ErrorMessage = "As senhas não conferem.")]
+        public string ConfirmarSenha { get; set; } = string.Empty;
+    }
+}

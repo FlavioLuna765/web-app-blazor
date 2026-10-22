@@ -1,0 +1,520 @@
+﻿@page "/checkout"
+
+@using Fcg.Web.Services.Carrinho
+@using Fcg.Web.Services.Checkout
+@using Fcg.Web.DTOs.Checkout
+@using Microsoft.AspNetCore.Components
+
+@inject ICarrinhoService CarrinhoService
+@inject ICheckoutService CheckoutService
+@inject NavigationManager Navigation
+
+<PageTitle>Checkout - FCG</PageTitle>
+
+<div class="checkout-page">
+    <div class="checkout-header">
+        <span class="section-label">FCG STORE</span>
+        <h1>Finalizar compra</h1>
+
+        @if (_retornoRecebido)
+        {
+            <p>Confira abaixo o resultado da consulta do seu pedido.</p>
+        }
+        else
+        {
+            <p>Revise seu pedido antes de confirmar a compra.</p>
+        }
+    </div>
+
+    @if (_retornoRecebido)
+    {
+        <section class="purchase-result">
+            <div class="purchase-result-icon">
+                @if (_statusPedido == "Approved")
+                {
+                    <span>✓</span>
+                }
+                else if (_statusPedido == "Rejected")
+                {
+                    <span>✕</span>
+                }
+                else
+                {
+                    <span>…</span>
+                }
+            </div>
+
+            <div class="purchase-result-content">
+                <span class="section-label">
+                    @(_statusPedido == "Approved"
+                        ? "PAGAMENTO APROVADO"
+                        : _statusPedido == "Rejected"
+                            ? "PAGAMENTO NÃO APROVADO"
+                            : "PAGAMENTO EM PROCESSAMENTO")
+                </span>
+
+                <h2>
+                    @(_statusPedido == "Approved"
+                        ? "Compra confirmada!"
+                        : _statusPedido == "Rejected"
+                            ? "Pagamento não aprovado"
+                            : "Aguardando confirmação do pagamento")
+                </h2>
+
+                <p>@_mensagemResultado</p>
+
+                @if (!string.IsNullOrWhiteSpace(_orderId))
+                {
+                    <p>Pedido: @_orderId</p>
+                }
+
+                @if (_consultandoPedido)
+                {
+                    <p>Consultando o status do pedido...</p>
+                }
+
+                @if (!string.IsNullOrWhiteSpace(_erro))
+                {
+                    <div class="checkout-error">
+                        <strong>Não foi possível confirmar o status</strong>
+                        <span>@_erro</span>
+                    </div>
+                }
+            </div>
+        </section>
+
+        @if (_compras.Count > 0)
+        {
+            <section class="purchase-list">
+                <div class="purchase-list-header">
+                    <div>
+                        <span class="section-label">PEDIDOS</span>
+                        <h2>Detalhes da compra</h2>
+                    </div>
+
+                    <span class="purchase-count">
+                        @_compras.Count
+                        @(_compras.Count == 1 ? "jogo" : "jogos")
+                    </span>
+                </div>
+
+                @foreach (var compra in _compras)
+                {
+                    <article class="purchase-item">
+                        <div class="purchase-item-main">
+                            <div class="purchase-item-icon">
+                                @if (!string.IsNullOrWhiteSpace(compra.ImagemUrl))
+                                {
+                                    <img class="checkout-game-image"
+                                         src="@compra.ImagemUrl"
+                                         alt="Capa de @compra.Titulo" />
+                                }
+                                else
+                                {
+                                    <span>🎮</span>
+                                }
+                            </div>
+
+                            <div class="purchase-item-info">
+                                <span class="checkout-item-genre">
+                                    @ObterNomeGenero(compra.Genero)
+                                </span>
+
+                                <h3>@compra.Titulo</h3>
+                                <p>Pedido: @compra.OrderId</p>
+                            </div>
+                        </div>
+
+                        <div class="purchase-item-right">
+                            <strong>@compra.Preco.ToString("C")</strong>
+
+                            @if (compra.Status == "Approved")
+                            {
+                                <span class="purchase-status approved">
+                                    ✓ Aprovado
+                                </span>
+                            }
+                            else if (compra.Status == "Rejected")
+                            {
+                                <span class="purchase-status rejected">
+                                    ✕ Recusado
+                                </span>
+                            }
+                            else
+                            {
+                                <span class="purchase-status pending">
+                                    Pendente
+                                </span>
+                            }
+                        </div>
+                    </article>
+                }
+            </section>
+        }
+
+        <div class="purchase-actions">
+            <button type="button"
+                    class="checkout-button"
+                    @onclick="VoltarParaCatalogo">
+                Continuar comprando
+            </button>
+
+            <button type="button"
+                    class="continue-button"
+                    @onclick="VoltarParaBiblioteca">
+                Ir para minha biblioteca
+            </button>
+        </div>
+    }
+    else if (CarrinhoService.Quantidade == 0)
+    {
+        <section class="checkout-empty">
+            <div class="checkout-empty-icon">🛒</div>
+            <h2>Seu carrinho está vazio</h2>
+            <p>Adicione pelo menos um jogo antes de continuar.</p>
+
+            <button type="button"
+                    class="primary-button"
+                    @onclick="VoltarParaCatalogo">
+                Explorar catálogo
+            </button>
+        </section>
+    }
+    else
+    {
+        <div class="checkout-content">
+            <section class="checkout-items">
+                <div class="checkout-section-header">
+                    <div>
+                        <span class="section-label">SEU PEDIDO</span>
+                        <h2>Jogos selecionados</h2>
+                    </div>
+
+                    <span class="checkout-item-count">
+                        @CarrinhoService.Quantidade
+                        @(CarrinhoService.Quantidade == 1 ? "item" : "itens")
+                    </span>
+                </div>
+
+                @foreach (var jogo in CarrinhoService.Itens)
+                {
+                    <article class="checkout-item">
+                        <div class="checkout-item-icon">
+                            @if (!string.IsNullOrWhiteSpace(jogo.ImagemUrl))
+                            {
+                                <img class="checkout-game-image"
+                                     src="@jogo.ImagemUrl"
+                                     alt="Capa de @jogo.Titulo" />
+                            }
+                            else
+                            {
+                                <span>🎮</span>
+                            }
+                        </div>
+
+                        <div class="checkout-item-info">
+                            <span class="checkout-item-genre">
+                                @ObterNomeGenero(jogo.Genero)
+                            </span>
+
+                            <h3>@jogo.Titulo</h3>
+                            <p>@jogo.Descricao</p>
+                        </div>
+
+                        <strong>@jogo.Preco.ToString("C")</strong>
+                    </article>
+                }
+            </section>
+
+            <aside class="checkout-summary">
+                <span class="section-label">CHECKOUT</span>
+                <h2>Resumo do pedido</h2>
+
+                <div class="summary-row">
+                    <span>Quantidade</span>
+                    <strong>@CarrinhoService.Quantidade</strong>
+                </div>
+
+                <div class="summary-row">
+                    <span>Total</span>
+                    <strong class="summary-total">
+                        @CarrinhoService.Total.ToString("C")
+                    </strong>
+                </div>
+
+                <div class="summary-divider"></div>
+
+                @if (!string.IsNullOrWhiteSpace(_erro))
+                {
+                    <div class="checkout-error">
+                        <strong>Não foi possível concluir a compra</strong>
+                        <span>@_erro</span>
+                    </div>
+                }
+
+                <button type="button"
+                        class="checkout-button"
+                        disabled="@_processando"
+                        @onclick="ConfirmarCompra">
+                    @if (_processando)
+                    {
+                        <span class="checkout-spinner"></span>
+                        <span>Preparando pagamento...</span>
+                    }
+                    else
+                    {
+                        <span>Continuar para Mercado Pago</span>
+                    }
+                </button>
+
+                <button type="button"
+                        class="continue-button"
+                        disabled="@_processando"
+                        @onclick="VoltarParaCarrinho">
+                    Voltar ao carrinho
+                </button>
+
+                <small class="checkout-security">
+                    🔒 Pagamento processado com segurança.
+                </small>
+            </aside>
+        </div>
+    }
+</div>
+
+@code {
+    [SupplyParameterFromQuery(Name = "resultado")]
+    private string? ResultadoRetorno { get; set; }
+
+    [SupplyParameterFromQuery(Name = "external_reference")]
+    private string? ReferenciaExterna { get; set; }
+
+    [SupplyParameterFromQuery(Name = "payment_id")]
+    private string? PaymentId { get; set; }
+
+    [SupplyParameterFromQuery(Name = "collection_status")]
+    private string? CollectionStatus { get; set; }
+
+    private bool _processando;
+    private bool _retornoRecebido;
+    private bool _consultandoPedido;
+    private string? _erro;
+    private string? _orderId;
+    private string _statusPedido = "Pending";
+    private string _mensagemResultado =
+        "O pagamento ainda precisa ser confirmado pela API.";
+
+    private readonly List<CompraStatusViewModel> _compras = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!string.IsNullOrWhiteSpace(ReferenciaExterna) ||
+            !string.IsNullOrWhiteSpace(ResultadoRetorno) ||
+            !string.IsNullOrWhiteSpace(PaymentId) ||
+            !string.IsNullOrWhiteSpace(CollectionStatus))
+        {
+            _retornoRecebido = true;
+            await ConsultarRetornoAsync();
+        }
+    }
+
+    private async Task ConsultarRetornoAsync()
+    {
+        _compras.Clear();
+        _erro = null;
+        _statusPedido = "Pending";
+
+        if (string.IsNullOrWhiteSpace(ReferenciaExterna))
+        {
+            _mensagemResultado =
+                "O Mercado Pago retornou à loja, mas não informou a referência do pedido. " +
+                "Não é possível confirmar a compra automaticamente. " +
+                "Consulte sua biblioteca antes de tentar pagar novamente.";
+            return;
+        }
+
+        _orderId = ReferenciaExterna;
+        _consultandoPedido = true;
+
+        try
+        {
+            // A resposta do backend é a fonte da verdade.
+            // Os parâmetros da URL não comprovam aprovação.
+            var pedido = await CheckoutService.ObterPedidoAsync(ReferenciaExterna);
+
+            _orderId = pedido.OrderId;
+
+            if (string.Equals(
+                    pedido.Status, "Approved",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                _statusPedido = "Approved";
+                _mensagemResultado =
+                    "A API confirmou a aprovação do pagamento. " +
+                    "Acesse sua biblioteca para verificar o jogo adquirido.";
+
+                var jogo = CarrinhoService.Itens.FirstOrDefault(
+                    item => string.Equals(
+                        item.Id, pedido.GameId, StringComparison.Ordinal));
+
+                _compras.Add(new CompraStatusViewModel
+                {
+                    OrderId = pedido.OrderId,
+                    Titulo = jogo?.Titulo ?? "Jogo adquirido",
+                    Preco = pedido.Preco,
+                    Genero = jogo?.Genero ?? 11,
+                    ImagemUrl = jogo?.ImagemUrl,
+                    Status = "Approved"
+                });
+
+                // Limpa somente após a API confirmar aprovação.
+                CarrinhoService.Limpar();
+            }
+            else if (string.Equals(
+                         pedido.Status, "Rejected",
+                         StringComparison.OrdinalIgnoreCase) ||
+                     string.Equals(
+                         pedido.Status, "Cancelled",
+                         StringComparison.OrdinalIgnoreCase) ||
+                     string.Equals(
+                         pedido.Status, "Canceled",
+                         StringComparison.OrdinalIgnoreCase))
+            {
+                _statusPedido = "Rejected";
+                _mensagemResultado =
+                    "O pedido consta como recusado ou cancelado. " +
+                    "O carrinho foi preservado para você tentar novamente.";
+                _compras.Add(CriarCompraPendente(
+                    pedido.OrderId, pedido.GameId, pedido.Preco));
+                _compras[^1].Status = "Rejected";
+            }
+            else
+            {
+                _statusPedido = "Pending";
+                _mensagemResultado =
+                    "Ainda não recebemos uma confirmação final. " +
+                    "Aguarde a atualização do pedido antes de tentar pagar novamente.";
+
+                _compras.Add(CriarCompraPendente(
+                    pedido.OrderId, pedido.GameId, pedido.Preco));
+            }
+        }
+        catch (Exception ex)
+        {
+            _erro = ex.Message;
+            _statusPedido = "Pending";
+            _mensagemResultado =
+                "Não foi possível consultar o pedido agora. " +
+                "Isso não significa que o pagamento foi aprovado ou recusado. " +
+                "Não faça outro pagamento até verificar o pedido.";
+        }
+        finally
+        {
+            _consultandoPedido = false;
+        }
+    }
+
+    private CompraStatusViewModel CriarCompraPendente(
+        string orderId, string gameId, decimal preco)
+    {
+        var jogo = CarrinhoService.Itens.FirstOrDefault(
+            item => string.Equals(
+                item.Id, gameId, StringComparison.Ordinal));
+
+        return new CompraStatusViewModel
+        {
+            OrderId = orderId,
+            Titulo = jogo?.Titulo ?? "Jogo do pedido",
+            Preco = preco,
+            Genero = jogo?.Genero ?? 11,
+            ImagemUrl = jogo?.ImagemUrl,
+            Status = "Pending"
+        };
+    }
+
+    private async Task ConfirmarCompra()
+    {
+        if (_processando || CarrinhoService.Quantidade == 0)
+            return;
+
+        _processando = true;
+        _erro = null;
+
+        try
+        {
+            if (CarrinhoService.Quantidade != 1)
+            {
+                throw new InvalidOperationException(
+                    "O checkout atual processa um jogo por vez. " +
+                    "Deixe apenas um jogo no carrinho para continuar.");
+            }
+
+            var jogo = CarrinhoService.Itens.Single();
+
+            var resultado = await CheckoutService.AdquirirAsync(jogo.Id);
+
+            if (string.IsNullOrWhiteSpace(resultado.OrderId))
+            {
+                throw new InvalidOperationException(
+                    "A API não retornou o identificador do pedido.");
+            }
+
+            var url = await CheckoutService.CriarCheckoutMercadoPagoAsync(
+                resultado.OrderId, jogo.Id, jogo.Preco);
+
+            if (!Uri.TryCreate(url, UriKind.Absolute, out var checkoutUri) ||
+                (checkoutUri.Scheme != Uri.UriSchemeHttps &&
+                 checkoutUri.Scheme != Uri.UriSchemeHttp))
+            {
+                throw new InvalidOperationException(
+                    "A API não retornou uma URL válida do Mercado Pago.");
+            }
+
+            Navigation.NavigateTo(checkoutUri.AbsoluteUri, forceLoad: true);
+        }
+        catch (Exception ex)
+        {
+            _erro = $"Não foi possível abrir o pagamento: {ex.Message}";
+        }
+        finally
+        {
+            _processando = false;
+        }
+    }
+
+    private void VoltarParaCarrinho() =>
+        Navigation.NavigateTo("/carrinho");
+
+    private void VoltarParaCatalogo() =>
+        Navigation.NavigateTo("/catalogo");
+
+    private void VoltarParaBiblioteca() =>
+        Navigation.NavigateTo("/biblioteca");
+
+    private static string ObterNomeGenero(int genero) => genero switch
+    {
+        0 => "Ação",
+        1 => "Aventura",
+        2 => "RPG",
+        3 => "Estratégia",
+        4 => "Esporte",
+        5 => "Corrida",
+        6 => "Simulação",
+        7 => "Puzzle",
+        8 => "FPS",
+        9 => "MOBA",
+        10 => "Educacional",
+        11 => "Outro",
+        _ => "Jogo"
+    };
+
+    private sealed class CompraStatusViewModel
+    {
+        public string OrderId { get; init; } = string.Empty;
+        public string Titulo { get; init; } = string.Empty;
+        public decimal Preco { get; init; }
+        public int Genero { get; init; }
+        public string? ImagemUrl { get; init; }
+        public string Status { get; set; } = "Pending";
+    }
+}
